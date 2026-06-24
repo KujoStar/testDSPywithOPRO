@@ -12,10 +12,13 @@ from statistics import mean
 from typing import Any
 
 import dspy
+import requests
 
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_DATASET = BASE_DIR / "haiku_examples.jsonl"
+USER_AGENT = "DSPyOPROHaikuDemo/0.1"
+WIKI_API = "https://en.wikipedia.org/w/api.php"
 
 
 class HaikuBot(dspy.Signature):
@@ -190,6 +193,52 @@ def split_examples(
     return train, val, test
 
 
+def wikipedia_search(query: str, limit: int = 5) -> list[str]:
+    """Search English Wikipedia and return candidate page titles."""
+    params = {
+        "action": "query",
+        "list": "search",
+        "srsearch": query,
+        "srlimit": limit,
+        "format": "json",
+    }
+    response = requests.get(
+        WIKI_API,
+        params=params,
+        headers={"User-Agent": USER_AGENT},
+        timeout=10,
+    )
+    response.raise_for_status()
+    data = response.json()
+    return [item["title"] for item in data["query"]["search"]]
+
+
+def get_wikipedia_page(title: str) -> str:
+    """Fetch a plain-text English Wikipedia page extract by title."""
+    params = {
+        "action": "query",
+        "prop": "extracts",
+        "explaintext": 1,
+        "redirects": 1,
+        "titles": title,
+        "format": "json",
+    }
+    response = requests.get(
+        WIKI_API,
+        params=params,
+        headers={"User-Agent": USER_AGENT},
+        timeout=10,
+    )
+    response.raise_for_status()
+    pages = response.json()["query"]["pages"]
+    page = next(iter(pages.values()))
+
+    if "missing" in page:
+        return f"No Wikipedia page found for title: {title}"
+
+    return page.get("extract", "")[:4000]
+
+
 def words(text: str) -> list[str]:
     return [w.lower() for w in WORD_RE.findall(text)]
 
@@ -289,8 +338,12 @@ def signature_with_instruction(instruction: str) -> type[dspy.Signature]:
     return type("CandidateHaikuBot", (HaikuBot,), {"__doc__": instruction})
 
 
-def build_haiku_program(instruction: str) -> dspy.Predict:
-    return dspy.Predict(signature_with_instruction(instruction))
+def build_haiku_program(instruction: str) -> dspy.ReAct:
+    return dspy.ReAct(
+        signature_with_instruction(instruction),
+        tools=[wikipedia_search, get_wikipedia_page],
+        max_iters=4,
+    )
 
 
 def evaluate_instruction(
@@ -404,7 +457,12 @@ def propose_instructions(
 
 
 def seed_instructions() -> list[str]:
-    return [
+    saved_best_path = BASE_DIR / "prompts" / "best_haiku_instruction.txt"
+    saved_best = ""
+    if saved_best_path.exists():
+        saved_best = saved_best_path.read_text(encoding="utf-8").strip()
+
+    seeds = [
         (
             "Write exactly one classical haiku in three lines. Use the location as "
             "a concrete visual anchor, evoke the season through imagery rather than "
@@ -424,6 +482,11 @@ def seed_instructions() -> list[str]:
             "stating it outright. Return only the poem."
         ),
     ]
+
+    if saved_best and saved_best not in seeds:
+        return [saved_best, *seeds]
+
+    return seeds
 
 
 def save_results(

@@ -5,6 +5,7 @@
 核心分工：
 
 - DSPy 定义并执行 `location + season + mood -> haiku` 程序。
+- `dspy.ReAct` 为 haiku generator 接入 Wikipedia search/page tools，用于补充地点和季节背景。
 - OPRO 外层循环维护 `instruction -> score -> feedback` 历史。
 - Optimizer LLM 根据历史生成新的候选 instruction。
 - 本地启发式 metric 负责快速评分，避免依赖 spaCy 大模型。
@@ -14,9 +15,9 @@
 ```text
 testDSPyOPRO/
   README.md                    # 实验说明与运行指令
-  requirements.txt             # 最小依赖，只需要 DSPy
+  requirements.txt             # 最小依赖：DSPy + requests
   haiku_examples.jsonl         # 本实验自带样本数据
-  test_dspy_opro_haiku.py      # 主实验脚本：DSPy 程序 + OPRO 循环 + metric
+  test_dspy_opro_haiku.py      # 主实验脚本：DSPy ReAct 程序 + OPRO 循环 + metric
   .gitignore                   # 忽略 key、缓存和运行产物
   prompts/
     best_haiku_instruction.txt # 运行时自动创建：当前最佳 instruction
@@ -56,11 +57,11 @@ haiku_examples.jsonl
 1. 先评估几条 seed instruction。
 2. 把历史 `instruction + score + feedback` 放进 optimizer prompt。
 3. 让 LLM 生成新的候选 instruction。
-4. 用同一个 DSPy `HaikuBot` 跑训练样本并打分。
+4. 用同一个 DSPy `HaikuBot` ReAct 程序跑训练样本并打分。
 5. 记录结果，继续下一轮，最后选择训练集最高分 prompt。
 6. 对最佳 prompt 再跑 val/test，并保存 JSON、Markdown 报告和 best prompt。
 
-这里 DSPy 负责稳定执行任务，OPRO 只负责外层搜索 prompt；线上或后续实验可以直接加载 `prompts/best_haiku_instruction.txt`，不需要再跑 OPRO。
+这里 DSPy 负责稳定执行任务，OPRO 只负责外层搜索 prompt。后续可以直接加载 `prompts/best_haiku_instruction.txt` 做固定 Prompt 推理，也可以把它作为下一轮 OPRO 的初始 seed 继续优化。
 
 ## 克隆与安装
 
@@ -76,6 +77,8 @@ cd testDSPywithOPRO
 ```bash
 python -m pip install -r requirements.txt
 ```
+
+注意：haiku generator 使用 `dspy.ReAct` 调用 Wikipedia 工具，运行时需要能访问 Wikipedia API。
 
 ## 配置 API Key
 
@@ -109,6 +112,8 @@ val_size=3
 test_size=3
 ```
 
+因此一次默认运行会先评估 seed instructions，再连续跑 2 轮 OPRO，每轮生成并评估 2 个新候选，最后跑 val/test 并保存结果。
+
 ## 更小预算 Smoke Test
 
 ```bash
@@ -130,6 +135,18 @@ python test_dspy_opro_haiku.py \
   --val-size 4 \
   --test-size 4
 ```
+
+如果 `prompts/best_haiku_instruction.txt` 已经存在，脚本会自动把它加入 seed instructions，并优先参与下一轮 OPRO 搜索。
+
+## Best Instruction 更新机制
+
+`prompts/best_haiku_instruction.txt` 的更新频率是每次脚本完整运行结束后更新一次：
+
+1. 运行开始时：如果已有 best instruction，读取它作为 seed 之一。
+2. 运行过程中：评估 seed 和 OPRO 新候选，但不会实时覆盖 best prompt 文件。
+3. 运行结束时：从本次所有候选中选择 `train_score` 最高的 instruction，并覆盖写入 `prompts/best_haiku_instruction.txt`。
+
+也就是说，默认 `--rounds 2` 时，会等两轮 OPRO 都完成后才更新 best instruction。
 
 ## 输出
 
