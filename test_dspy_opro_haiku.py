@@ -404,7 +404,12 @@ def propose_instructions(
 
 
 def seed_instructions() -> list[str]:
-    return [
+    saved_best_path = BASE_DIR / "prompts" / "best_haiku_instruction.txt"
+    saved_best = ""
+    if saved_best_path.exists():
+        saved_best = saved_best_path.read_text(encoding="utf-8").strip()
+
+    seeds = [
         (
             "Write exactly one classical haiku in three lines. Use the location as "
             "a concrete visual anchor, evoke the season through imagery rather than "
@@ -424,6 +429,11 @@ def seed_instructions() -> list[str]:
             "stating it outright. Return only the poem."
         ),
     ]
+
+    if saved_best and saved_best not in seeds:
+        return [saved_best, *seeds]
+
+    return seeds
 
 
 def save_results(

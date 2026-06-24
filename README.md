@@ -60,7 +60,7 @@ haiku_examples.jsonl
 5. 记录结果，继续下一轮，最后选择训练集最高分 prompt。
 6. 对最佳 prompt 再跑 val/test，并保存 JSON、Markdown 报告和 best prompt。
 
-这里 DSPy 负责稳定执行任务，OPRO 只负责外层搜索 prompt；线上或后续实验可以直接加载 `prompts/best_haiku_instruction.txt`，不需要再跑 OPRO。
+这里 DSPy 负责稳定执行任务，OPRO 只负责外层搜索 prompt。后续可以直接加载 `prompts/best_haiku_instruction.txt` 做固定 Prompt 推理，也可以把它作为下一轮 OPRO 的初始 seed 继续优化。
 
 ## 克隆与安装
 
@@ -108,6 +108,8 @@ train_size=6
 val_size=3
 test_size=3
 ```
+
+如果 `prompts/best_haiku_instruction.txt` 已经存在，脚本会在运行开始时自动把它加入 seed instructions，并优先参与本次 OPRO 搜索。运行过程中不会实时覆盖该文件；每次脚本完整运行结束后，才会用本次 `train_score` 最高的 instruction 更新它。
 
 ## 更小预算 Smoke Test
 
