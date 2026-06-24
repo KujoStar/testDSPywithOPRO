@@ -62,19 +62,40 @@ haiku_examples.jsonl
 
 这里 DSPy 负责稳定执行任务，OPRO 只负责外层搜索 prompt；线上或后续实验可以直接加载 `prompts/best_haiku_instruction.txt`，不需要再跑 OPRO。
 
-## 安装
+## 克隆与安装
+
+从 GitHub 克隆项目后进入本目录：
+
+```bash
+git clone https://github.com/KujoStar/testDSPywithOPRO.git
+cd testDSPywithOPRO
+```
 
 建议在已有 DSPy 环境中运行。如果要单独安装：
 
 ```bash
-cd testDSPyOPRO
 python -m pip install -r requirements.txt
 ```
+
+## 配置 API Key
+
+脚本默认使用 `deepseek/deepseek-v4-flash`，也可以用其他 LiteLLM 支持的模型。均需要用户自己配置 LLM API key。推荐使用环境变量：
+
+```bash
+export DEEPSEEK_API_KEY="your_api_key_here"
+```
+
+也可以在 `testDSPyOPRO` 目录下新建本地文件：
+
+```bash
+printf "your_api_key_here" > apikey.txt
+```
+
+`apikey.txt` 已经在 `.gitignore` 中，不要把自己的 API key 提交到 GitHub。
 
 ## 最小运行
 
 ```bash
-cd testDSPyOPRO
 python test_dspy_opro_haiku.py
 ```
 
@@ -91,7 +112,6 @@ test_size=3
 ## 更小预算 Smoke Test
 
 ```bash
-cd testDSPyOPRO
 python test_dspy_opro_haiku.py \
   --rounds 1 \
   --candidates-per-round 1 \
@@ -103,7 +123,6 @@ python test_dspy_opro_haiku.py \
 ## 扩大搜索预算
 
 ```bash
-cd testDSPyOPRO
 python test_dspy_opro_haiku.py \
   --rounds 4 \
   --candidates-per-round 3 \
